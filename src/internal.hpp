@@ -15,7 +15,9 @@ namespace internal {
 bool initPlatform();
 void deinitPlatform();
 
-Span<StringView> platformGetVulkanExtensions(Arena* arena);
+Span<StringView> getPlatformVulkanExtensions(Arena* arena);
+void* getVulkanInstance();
+
 bool initGpu();
 void deinitGpu();
 
@@ -40,7 +42,7 @@ struct Swapchain {
     u32 imageCount() const;
 
     static Swapchain create(
-        void* platformWindow,
+        void* surface,
         u32 width,
         u32 height,
         GpuPresentMode presentMode,

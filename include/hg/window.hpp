@@ -19,6 +19,16 @@ void processEvents();
 bool wasQuit();
 
 /**
+ * The types of events
+ */
+enum WindowEventType : u32 {
+    WindowEventType_none = 0,
+    WindowEventType_buttonPress,
+    WindowEventType_buttonRelease,
+    WindowEventType_count,
+};
+
+/**
  * The button inputs
  */
 enum Button : u32 {
@@ -142,16 +152,6 @@ enum Button : u32 {
 };
 
 /**
- * The types of events
- */
-enum WindowEventType : u32 {
-    WindowEventType_none = 0,
-    WindowEventType_buttonPress,
-    WindowEventType_buttonRelease,
-    WindowEventType_count,
-};
-
-/**
  * Input event data
  */
 struct WindowEvent {
@@ -160,7 +160,7 @@ struct WindowEvent {
      */
     WindowEventType type;
     /**
-     * The button which was pressed or released
+     * The button that was pressed or released
      */
     Button button;
 };
@@ -228,12 +228,7 @@ struct Window {
     /**
      * Set the width and height
      */
-    void setSize(u32 width, u32 height);
-
-    /**
-     * Set the window to resizeable or not
-     */
-    void setResizeable(bool set = true);
+    void setSize(u32 width, u32 height, bool resizeable = true);
 
     /**
      * Set to fullscreen or disable fullscreen
@@ -241,14 +236,14 @@ struct Window {
     void setFullscreen(bool set = true);
 
     /**
-     * Returns the window's current image, or nullptr if unavailable this frame
-     */
-    GpuView* imageView() const;
-
-    /**
      * Returns the window's pixel format
      */
     Format imageFormat() const;
+
+    /**
+     * Returns the window's current image, or nullptr if unavailable this frame
+     */
+    GpuView* imageView() const;
 
     /**
      * Returns whether the window was closed
@@ -271,12 +266,12 @@ struct Window {
     u32 height() const;
 
     /**
-     * Returns the current x position of the mouse relative to the window
+     * Returns the current mouse x position relative to the window height
      */
     f32 mouseX() const;
 
     /**
-     * Returns the current y position of the mouse relative to the window
+     * Returns the current mouse y position relative to the window height
      */
     f32 mouseY() const;
 

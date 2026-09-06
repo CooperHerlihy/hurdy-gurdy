@@ -31,7 +31,7 @@ void deinitPlatform()
     sdl::unloadSDL();
 }
 
-Span<StringView> platformGetVulkanExtensions(Arena* arena)
+Span<StringView> getPlatformVulkanExtensions(Arena* arena)
 {
     u32 extCount;
     const char* const* exts = SDL_Vulkan_GetInstanceExtensions(&extCount);

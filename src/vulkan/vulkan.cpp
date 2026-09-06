@@ -5,8 +5,6 @@
 #include "hg/utility.hpp"
 #include "hg/array.hpp"
 
-#include <SDL3/SDL_vulkan.h>
-
 #include <imgui.h>
 #include <backends/imgui_impl_vulkan.h>
 
@@ -917,6 +915,11 @@ VkSampler samplerGet(
 
 namespace internal {
 
+void* getVulkanInstance()
+{
+    return vk.instance;
+}
+
 bool initGpu()
 {
     ArenaScope scratch = getScratch();
@@ -925,7 +928,7 @@ bool initGpu()
         goto loadFailed;
 
     {
-        Span<StringView> exts = platformGetVulkanExtensions(scratch);
+        Span<StringView> exts = getPlatformVulkanExtensions(scratch);
 #ifdef HG_VK_DEBUG_MESSENGER
         [[maybe_unused]]
         bool extended = scratch.extend(exts.data, exts.count, exts.count + 1);
@@ -1333,27 +1336,19 @@ void Swapchain::resize(u32 newWidth, u32 newHeight)
 }
 
 Swapchain Swapchain::create(
-    void* platformWindow,
+    void* surface,
     u32 width,
     u32 height,
     GpuPresentMode preferredPresentMode,
     GpuImageUsageFlags imageUsage)
 {
-    VkSurfaceKHR surface;
-    if (!SDL_Vulkan_CreateSurface((SDL_Window*)platformWindow, vk.instance, nullptr, &surface))
-    {
-        setError(SDL_GetError());
-        return {};
-    }
-
-    Swapchain swap;
+    Swapchain swap{};
     swap.data = makeUnique<SwapchainData>();
-    swap.data->surface = surface;
-    swap.data->format = findSwapchainFormat(surface);
-    swap.data->presentMode = findSwapchainPresentMode(surface, preferredPresentMode);
+    swap.data->surface = static_cast<VkSurfaceKHR>(surface);
+    swap.data->format = findSwapchainFormat(swap.data->surface);
+    swap.data->presentMode = findSwapchainPresentMode(swap.data->surface, preferredPresentMode);
     swap.data->imageUsage = imageUsage;
-    swap.data->imageAvailable = Array<VkSemaphore>{
-        vk.frameCount, vk.frameCount};
+    swap.data->imageAvailable = Array<VkSemaphore>{vk.frameCount, vk.frameCount};
 
     for (u32 i = 0; i < vk.frameCount; ++i)
     {

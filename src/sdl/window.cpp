@@ -6,6 +6,8 @@
 #include "hg/map.hpp"
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
+#include "vulkan/vulkan.h"
 
 #include <imgui.h>
 #include <backends/imgui_impl_sdl3.h>
@@ -87,33 +89,31 @@ void Window::setTitle(StringView title)
     SDL_SetWindowTitle(data->sdlWindow, cString(scratch, title));
 }
 
-void Window::setSize(u32 width, u32 height)
+void Window::setSize(u32 width, u32 height, bool resizeable)
 {
     SDL_SetWindowSize(data->sdlWindow, static_cast<int>(width), static_cast<int>(height));
     data->swap.resize(width, height);
-}
 
-void Window::setResizeable(bool set)
-{
-    SDL_SetWindowResizable(data->sdlWindow, set);
+    SDL_SetWindowResizable(data->sdlWindow, resizeable);
 }
 
 void Window::setFullscreen(bool set)
 {
     SDL_SetWindowFullscreen(data->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
+
     u32 w, h;
     SDL_GetWindowSize(data->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
     data->swap.resize(w, h);
 }
 
-GpuView* Window::imageView() const
-{
-    return data->swap.currentView();
-}
-
 Format Window::imageFormat() const
 {
     return data->swap.format();
+}
+
+GpuView* Window::imageView() const
+{
+    return data->swap.currentView();
 }
 
 bool Window::wasClosed() const
@@ -436,13 +436,18 @@ Maybe<Window> Window::create(const WindowConfig& config)
         reinterpret_cast<int*>(&w),
         reinterpret_cast<int*>(&h));
 
-    window->data->swap = internal::Swapchain::create(
+    VkSurfaceKHR surface;
+    if (!SDL_Vulkan_CreateSurface(
         window->data->sdlWindow,
-        w,
-        h,
-        config.preferredPresentMode,
-        config.imageUsage);
+        static_cast<VkInstance>(internal::getVulkanInstance()),
+        nullptr,
+        &surface))
+    {
+        setError(SDL_GetError());
+        goto surfaceFailed;
+    }
 
+    window->data->swap = internal::Swapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
     if (window->data->swap.data == nullptr)
     {
         windowState.ids.remove(SDL_GetWindowID(window->data->sdlWindow));
@@ -454,6 +459,8 @@ Maybe<Window> Window::create(const WindowConfig& config)
     return window;
 
 windowFailed:
+    vkDestroySurfaceKHR(static_cast<VkInstance>(internal::getVulkanInstance()), surface, nullptr);
+surfaceFailed:
     SDL_DestroyWindow(window->data->sdlWindow);
     window->data = {};
     return {};
