@@ -60,8 +60,8 @@ struct SpinLockScope {
      * Parameters
      * - lockVal The spinlock to acquire
      */
-    SpinLockScope(SpinLock* lockVal)
-        : lock{lockVal}
+    SpinLockScope(SpinLock& lockVal)
+        : lock{&lockVal}
     {
         if (lock != nullptr)
             lock->acquire();

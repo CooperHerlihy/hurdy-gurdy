@@ -154,7 +154,7 @@ enum WindowEventType : u32 {
 /**
  * Input event data
  */
-union WindowEvent {
+struct WindowEvent {
     /**
      * The type of event
      */

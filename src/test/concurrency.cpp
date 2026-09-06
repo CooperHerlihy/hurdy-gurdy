@@ -92,7 +92,7 @@ TEST(testSpinLockScopeRAII)
 {
     SpinLock lock{};
     {
-        SpinLockScope scope{&lock};
+        SpinLockScope scope{lock};
     }
     lock.acquire();
     lock.release();
@@ -107,7 +107,7 @@ TEST(testSpinLockScopeNull)
 TEST(testSpinLockScopeMoveConstruct)
 {
     SpinLock lock{};
-    SpinLockScope inner{&lock};
+    SpinLockScope inner{lock};
     SpinLockScope moved{std::move(inner)};
     ASSERT(inner.lock == nullptr);
     ASSERT(moved.lock == &lock);
@@ -116,7 +116,7 @@ TEST(testSpinLockScopeMoveConstruct)
 TEST(testSpinLockScopeMoveAssign)
 {
     SpinLock lock{};
-    SpinLockScope a{&lock};
+    SpinLockScope a{lock};
     SpinLockScope b{};
     b = std::move(a);
     ASSERT(a.lock == nullptr);
@@ -383,7 +383,7 @@ TEST(testConcurrencyStress)
             {
                 for (u32 i = 0; i < incrementsPerThread; ++i)
                 {
-                    SpinLockScope scope{&lock};
+                    SpinLockScope scope{lock};
                     ++shared;
                 }
             }};

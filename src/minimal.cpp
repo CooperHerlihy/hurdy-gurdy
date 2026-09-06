@@ -21,15 +21,15 @@ int main()
     // window.setSize(1200, 800);
     // window.setFullscreen();
 
-    f32 musicData[2000];
+    f32 musicData[8000];
     Asset<Sound> music = newAsset<Sound>();
     music->data = musicData;
-    music->frequency = 8000;
+    music->frequency = 48000;
     music->channels = 1;
 
     for (u32 i = 0; i < size(musicData); ++i)
     {
-        f32 t = static_cast<f32>(i) * pif * 2.0f / 8000.0f;
+        f32 t = static_cast<f32>(i) * pif * 2.0f / 48000.0f;
         musicData[i] = 0;
         for (u32 j = 1; j <= 64; ++j)
         {
@@ -38,10 +38,10 @@ int main()
         }
     }
 
-    f32 soundData[2000];
+    f32 soundData[8000];
     Asset<Sound> sound = newAsset<Sound>();
     sound->data = soundData;
-    sound->frequency = 8000;
+    sound->frequency = 48000;
     sound->channels = 1;
 
     for (u32 i = 0; i < size(soundData); ++i)
@@ -51,6 +51,8 @@ int main()
     }
 
     AudioPlayer audio{};
+    defaultAudioDevice().setCallback(audio.callback, &audio);
+
     audio.playMusic(music);
     audio.setMusicGain(music, 0.3f);
     audio.pauseMusic(music);
@@ -109,8 +111,6 @@ int main()
             if (wasQuit() || window.wasClosed())
                 goto quit;
 
-            audio.update();
-
             width = window.width();
             height = window.height();
             camera.setOrthographic(static_cast<f32>(width) / static_cast<f32>(height), 1.0f);
@@ -118,9 +118,8 @@ int main()
             Span<WindowEvent> events = window.events();
             for (WindowEvent event : events)
             {
-                if (event.type == WindowEventType_buttonPress &&
-                    event.button == Button_space)
-                    audio.playSound(sound, 0.5f);
+                if (event.type == WindowEventType_buttonPress && event.button == Button_space)
+                    audio.playSound(sound, 1.0f);
             }
 
             if (window.isButtonDown(Button_m))

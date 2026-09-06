@@ -1,9 +1,5 @@
 #include "hg/audio.hpp"
 
-#include "hg/time.hpp"
-
-#include <algorithm>
-
 namespace hg {
 
 template<>
@@ -13,71 +9,71 @@ void assetLoadImpl(AssetData<Sound>* data)
     HG_PANIC("Load audio file impl : TODO\n");
 }
 
-void AudioPlayer::update()
+void AudioPlayer::update(Span<f32> buf, AudioConfig config)
 {
-    for (u64 i = sounds.count - 1; i < sounds.count; --i)
+    SpinLockScope scope{lock};
+
+    (void)config;
+
+    for (u32 i = 0; i < sounds.count; ++i)
     {
-        if (sounds[i].queuedSize() == 0)
+        for (f32& f : buf)
         {
-            sounds.removeShift(i);
+            f += sounds[i].asset->data[sounds[i].pos++] * sounds[i].gain;
+            if (sounds[i].pos == sounds[i].asset->data.count)
+            {
+                sounds.removeSwap(i--);
+                break;
+            }
         }
     }
 
     for (u32 i = 0; i < music.count; ++i)
     {
-        AudioPlayerMusic& m = music[i];
-        if (!m.playing)
+        if (!music[i].playing)
             continue;
 
-        u32 total = m.sound->frequency / 16;
-        u32 queued = m.stream.queuedSize();
-        if (queued >= total)
-            continue;
-        u32 toPush = total - queued;
-
-        ArenaScope scratch = getScratch();
-        ArrayTemp<f32> queue{scratch, 0, toPush};
-
-        while (queue.count < toPush)
+        for (f32& f : buf)
         {
-            if (m.pos == m.sound->data.count)
-                m.pos = 0;
-
-            u64 toQueue = std::min(toPush - queue.count, m.sound->data.count - m.pos);
-            HG_ASSERT(queue.count + toQueue <= toPush);
-            u64 end = queue.count;
-            queue.count += toQueue;
-            memcpy(&queue[end], &m.sound->data[m.pos], toQueue * sizeof(f32));
-            m.pos += toQueue;
+            f += music[i].asset->data[music[i].pos++] * music[i].gain;
+            if (music[i].pos == music[i].asset->data.count)
+            {
+                music[i].pos -= music[i].asset->data.count;
+            }
         }
-
-        m.stream.push(queue);
     }
 }
 
-void AudioPlayer::playMusic(const Asset<Sound>& musicSrc)
+void AudioPlayer::playSound(const Asset<Sound>& soundSrc, f32 gain)
 {
+    SpinLockScope scope{lock};
+
+    sounds.push({soundSrc.clone(), 0, gain, true});
+}
+
+void AudioPlayer::playMusic(const Asset<Sound>& musicSrc, f32 gain)
+{
+    SpinLockScope scope{lock};
+
     for (u32 i = 0; i < music.count; ++i)
     {
-        if (music[i].sound == musicSrc)
+        if (music[i].asset == musicSrc)
         {
             music[i].playing = true;
             return;
         }
     }
 
-    AudioPlayerMusic& track = music.push();
-    track.stream = {musicSrc->frequency, musicSrc->channels};
-    track.sound = musicSrc.clone();
-    track.pos = 0;
-    track.playing = true;
+    music.push({musicSrc.clone(), 0, gain, true});
 }
 
 void AudioPlayer::killMusic(const Asset<Sound>& musicSrc)
 {
+    SpinLockScope scope{lock};
+
     for (u32 i = 0; i < music.count; ++i)
     {
-        if (music[i].sound == musicSrc)
+        if (music[i].asset == musicSrc)
         {
             music.removeShift(i);
             return;
@@ -87,9 +83,11 @@ void AudioPlayer::killMusic(const Asset<Sound>& musicSrc)
 
 void AudioPlayer::pauseMusic(const Asset<Sound>& musicSrc)
 {
+    SpinLockScope scope{lock};
+
     for (u32 i = 0; i < music.count; ++i)
     {
-        if (music[i].sound == musicSrc)
+        if (music[i].asset == musicSrc)
         {
             music[i].playing = false;
             return;
@@ -99,21 +97,16 @@ void AudioPlayer::pauseMusic(const Asset<Sound>& musicSrc)
 
 void AudioPlayer::setMusicGain(const Asset<Sound>& musicSrc, f32 gain)
 {
+    SpinLockScope scope{lock};
+
     for (u32 i = 0; i < music.count; ++i)
     {
-        if (music[i].sound == musicSrc)
+        if (music[i].asset == musicSrc)
         {
-            music[i].stream.setGain(gain);
+            music[i].gain = gain;
             return;
         }
     }
-}
-
-void AudioPlayer::playSound(const Asset<Sound>& sound, f32 gain)
-{
-    AudioStream& stream = sounds.push({sound->frequency, sound->channels});
-    stream.setGain(gain);
-    stream.push(sound->data);
 }
 
 } // namespace hg

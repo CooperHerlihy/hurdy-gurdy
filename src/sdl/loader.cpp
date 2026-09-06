@@ -74,8 +74,8 @@ struct SdlFuncs {
     HG_MAKE_SDL_FUNC(SDL_CreateAudioStream);
     HG_MAKE_SDL_FUNC(SDL_DestroyAudioStream);
     HG_MAKE_SDL_FUNC(SDL_BindAudioStream);
+    HG_MAKE_SDL_FUNC(SDL_SetAudioStreamGetCallback);
     HG_MAKE_SDL_FUNC(SDL_SetAudioStreamFormat);
-    HG_MAKE_SDL_FUNC(SDL_ClearAudioStream);
     HG_MAKE_SDL_FUNC(SDL_PutAudioStreamData);
     HG_MAKE_SDL_FUNC(SDL_GetAudioStreamQueued);
     HG_MAKE_SDL_FUNC(SDL_SetAudioStreamGain);
@@ -190,8 +190,8 @@ bool loadSDL()
     HG_LOAD_SDL_FUNC(SDL_CreateAudioStream);
     HG_LOAD_SDL_FUNC(SDL_DestroyAudioStream);
     HG_LOAD_SDL_FUNC(SDL_BindAudioStream);
+    HG_LOAD_SDL_FUNC(SDL_SetAudioStreamGetCallback);
     HG_LOAD_SDL_FUNC(SDL_SetAudioStreamFormat);
-    HG_LOAD_SDL_FUNC(SDL_ClearAudioStream);
     HG_LOAD_SDL_FUNC(SDL_PutAudioStreamData);
     HG_LOAD_SDL_FUNC(SDL_GetAudioStreamQueued);
     HG_LOAD_SDL_FUNC(SDL_SetAudioStreamGain);
@@ -222,187 +222,420 @@ void unloadSDL()
 } // namespace sdl
 } // namespace hg
 
-#define SDL_WRAPPER(name, ret, params, args) \
-    extern "C" ret SDLCALL name params \
-    { \
-        return ::hg::sdl::sdlFuncs.name args; \
-    }
+extern "C" bool SDLCALL SDL_Init(SDL_InitFlags flags)
+{
+    return ::hg::sdl::sdlFuncs.SDL_Init(flags);
+}
 
-#define SDL_WRAPPER_VOID(name, params, args) \
-    extern "C" void SDLCALL name params \
-    { \
-        ::hg::sdl::sdlFuncs.name args; \
-    }
+extern "C" void SDLCALL SDL_Quit()
+{
+    ::hg::sdl::sdlFuncs.SDL_Quit();
+}
 
-SDL_WRAPPER(SDL_Init, bool,
-    (SDL_InitFlags flags), (flags))
-SDL_WRAPPER_VOID(SDL_Quit, (), ())
-SDL_WRAPPER(SDL_GetError, const char*, (), ())
+extern "C" const char* SDLCALL SDL_GetError()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetError();
+}
 
-// video/window
-SDL_WRAPPER(SDL_CreateWindow, SDL_Window*,
-    (const char* title, int w, int h, SDL_WindowFlags flags),
-    (title, w, h, flags))
-SDL_WRAPPER_VOID(SDL_DestroyWindow, (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_GetWindowID, SDL_WindowID, (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_GetWindowSize, bool,
-    (SDL_Window* window, int* w, int* h), (window, w, h))
-SDL_WRAPPER(SDL_GetWindowSizeInPixels, bool,
-    (SDL_Window* window, int* w, int* hp), (window, w, hp))
-SDL_WRAPPER(SDL_GetWindowPosition, bool,
-    (SDL_Window* window, int* x, int* y), (window, x, y))
-SDL_WRAPPER(SDL_SetWindowPosition, bool,
-    (SDL_Window* window, int x, int y), (window, x, y))
-SDL_WRAPPER(SDL_SetWindowSize, bool,
-    (SDL_Window* window, int w, int h), (window, w, h))
-SDL_WRAPPER(SDL_SetWindowTitle, bool,
-    (SDL_Window* window, const char* title), (window, title))
-SDL_WRAPPER(SDL_SetWindowOpacity, bool,
-    (SDL_Window* window, float opacity), (window, opacity))
-SDL_WRAPPER(SDL_SetWindowResizable, bool,
-    (SDL_Window* window, bool resizable), (window, resizable))
-SDL_WRAPPER(SDL_SetWindowFullscreen, bool,
-    (SDL_Window* window, bool fullscreen), (window, fullscreen))
-SDL_WRAPPER(SDL_ShowWindow, bool, (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_RaiseWindow, bool, (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_SetWindowParent, bool,
-    (SDL_Window* window, SDL_Window* parent), (window, parent))
-SDL_WRAPPER(SDL_GetWindowFlags, SDL_WindowFlags,
-    (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_GetWindowDisplayScale, float,
-    (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_GetWindowRelativeMouseMode, bool,
-    (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_GetWindowFromID, SDL_Window*,
-    (SDL_WindowID id), (id))
-SDL_WRAPPER(SDL_GetWindowProperties, SDL_PropertiesID,
-    (SDL_Window* window), (window))
+extern "C" SDL_Window* SDLCALL SDL_CreateWindow(const char* title, int w, int h, SDL_WindowFlags flags)
+{
+    return ::hg::sdl::sdlFuncs.SDL_CreateWindow(title, w, h, flags);
+}
 
-// display
-SDL_WRAPPER(SDL_GetDisplays, SDL_DisplayID*, (int* count), (count))
-SDL_WRAPPER(SDL_GetPrimaryDisplay, SDL_DisplayID, (), ())
-SDL_WRAPPER(SDL_GetFullscreenDisplayModes, SDL_DisplayMode**,
-    (SDL_DisplayID displayID, int* count), (displayID, count))
-SDL_WRAPPER(SDL_GetDisplayBounds, bool,
-    (SDL_DisplayID displayID, SDL_Rect* rect), (displayID, rect))
-SDL_WRAPPER(SDL_GetDisplayUsableBounds, bool,
-    (SDL_DisplayID displayID, SDL_Rect* rect), (displayID, rect))
-SDL_WRAPPER(SDL_GetDisplayContentScale, float,
-    (SDL_DisplayID displayID), (displayID))
+extern "C" void SDLCALL SDL_DestroyWindow(SDL_Window* window)
+{
+    ::hg::sdl::sdlFuncs.SDL_DestroyWindow(window);
+}
 
-// input/mouse
-SDL_WRAPPER_VOID(SDL_WarpMouseInWindow,
-    (SDL_Window* window, float x, float y), (window, x, y))
-SDL_WRAPPER(SDL_WarpMouseGlobal, bool, (float x, float y), (x, y))
-SDL_WRAPPER(SDL_GetGlobalMouseState, SDL_MouseButtonFlags,
-    (float* x, float* y), (x, y))
-SDL_WRAPPER(SDL_GetMouseFocus, SDL_Window*, (), ())
-SDL_WRAPPER(SDL_GetKeyboardFocus, SDL_Window*, (), ())
-SDL_WRAPPER(SDL_CaptureMouse, bool, (bool capture), (capture))
-SDL_WRAPPER(SDL_GetKeyName, const char*, (SDL_Keycode key), (key))
-SDL_WRAPPER(SDL_GetScancodeName, const char*,
-    (SDL_Scancode scancode), (scancode))
+extern "C" SDL_WindowID SDLCALL SDL_GetWindowID(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowID(window);
+}
 
-// clipboard
-SDL_WRAPPER(SDL_HasClipboardText, bool, (), ())
-SDL_WRAPPER(SDL_GetClipboardText, char*, (), ())
-SDL_WRAPPER(SDL_SetClipboardText, bool, (const char* text), (text))
+extern "C" bool SDLCALL SDL_GetWindowSize(SDL_Window* window, int* w, int* h)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowSize(window, w, h);
+}
 
-// cursor
-SDL_WRAPPER(SDL_CreateSystemCursor, SDL_Cursor*,
-    (SDL_SystemCursor id), (id))
-SDL_WRAPPER_VOID(SDL_DestroyCursor, (SDL_Cursor* cursor), (cursor))
-SDL_WRAPPER(SDL_SetCursor, bool, (SDL_Cursor* cursor), (cursor))
-SDL_WRAPPER(SDL_ShowCursor, bool, (), ())
-SDL_WRAPPER(SDL_HideCursor, bool, (), ())
+extern "C" bool SDLCALL SDL_GetWindowSizeInPixels(SDL_Window* window, int* w, int* hp)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowSizeInPixels(window, w, hp);
+}
 
-// hints
-SDL_WRAPPER(SDL_SetHint, bool, (const char* name, const char* value),
-    (name, value))
+extern "C" bool SDLCALL SDL_GetWindowPosition(SDL_Window* window, int* x, int* y)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowPosition(window, x, y);
+}
 
-// events
-SDL_WRAPPER(SDL_PollEvent, bool, (SDL_Event* event), (event))
+extern "C" bool SDLCALL SDL_SetWindowPosition(SDL_Window* window, int x, int y)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetWindowPosition(window, x, y);
+}
 
-// timer/performance
-SDL_WRAPPER(SDL_GetTicksNS, Uint64, (), ())
-SDL_WRAPPER(SDL_GetPerformanceCounter, Uint64, (), ())
-SDL_WRAPPER(SDL_GetPerformanceFrequency, Uint64, (), ())
+extern "C" bool SDLCALL SDL_SetWindowSize(SDL_Window* window, int w, int h)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetWindowSize(window, w, h);
+}
 
-// version
-SDL_WRAPPER(SDL_GetVersion, int, (), ())
+extern "C" bool SDLCALL SDL_SetWindowTitle(SDL_Window* window, const char* title)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetWindowTitle(window, title);
+}
 
-// OpenGL
-SDL_WRAPPER(SDL_GL_CreateContext, SDL_GLContext,
-    (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_GL_DestroyContext, bool,
-    (SDL_GLContext context), (context))
-SDL_WRAPPER(SDL_GL_GetCurrentContext, SDL_GLContext, (), ())
-SDL_WRAPPER(SDL_GL_MakeCurrent, bool,
-    (SDL_Window* window, SDL_GLContext context), (window, context))
-SDL_WRAPPER(SDL_GL_SetAttribute, bool,
-    (SDL_GLAttr attr, int value), (attr, value))
-SDL_WRAPPER(SDL_GL_SetSwapInterval, bool, (int interval), (interval))
-SDL_WRAPPER(SDL_GL_SwapWindow, bool, (SDL_Window* window), (window))
+extern "C" bool SDLCALL SDL_SetWindowOpacity(SDL_Window* window, float opacity)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetWindowOpacity(window, opacity);
+}
 
-// Vulkan surface
-SDL_WRAPPER(SDL_Vulkan_CreateSurface, bool,
-    (SDL_Window* window, VkInstance instance,
-     const VkAllocationCallbacks* allocator, VkSurfaceKHR* surface),
-    (window, instance, allocator, surface))
-SDL_WRAPPER(SDL_Vulkan_GetInstanceExtensions, const char* const*,
-    (Uint32* count), (count))
+extern "C" bool SDLCALL SDL_SetWindowResizable(SDL_Window* window, bool resizable)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetWindowResizable(window, resizable);
+}
 
-// audio
-SDL_WRAPPER(SDL_OpenAudioDevice, SDL_AudioDeviceID,
-    (SDL_AudioDeviceID devid, const SDL_AudioSpec* spec), (devid, spec))
-SDL_WRAPPER_VOID(SDL_CloseAudioDevice,
-    (SDL_AudioDeviceID devid), (devid))
-SDL_WRAPPER(SDL_CreateAudioStream, SDL_AudioStream*,
-    (const SDL_AudioSpec* src_spec,
-     const SDL_AudioSpec* dst_spec), (src_spec, dst_spec))
-SDL_WRAPPER_VOID(SDL_DestroyAudioStream,
-    (SDL_AudioStream* stream), (stream))
-SDL_WRAPPER(SDL_BindAudioStream, bool,
-    (SDL_AudioDeviceID devid, SDL_AudioStream* stream),
-    (devid, stream))
-SDL_WRAPPER(SDL_SetAudioStreamFormat, bool,
-    (SDL_AudioStream* stream, const SDL_AudioSpec* src_spec,
-     const SDL_AudioSpec* dst_spec), (stream, src_spec, dst_spec))
-SDL_WRAPPER(SDL_ClearAudioStream, bool,
-    (SDL_AudioStream* stream), (stream))
-SDL_WRAPPER(SDL_PutAudioStreamData, bool,
-    (SDL_AudioStream* stream, const void* data, int len),
-    (stream, data, len))
-SDL_WRAPPER(SDL_GetAudioStreamQueued, int,
-    (SDL_AudioStream* stream), (stream))
-SDL_WRAPPER(SDL_SetAudioStreamGain, bool,
-    (SDL_AudioStream* stream, float gain), (stream, gain))
+extern "C" bool SDLCALL SDL_SetWindowFullscreen(SDL_Window* window, bool fullscreen)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetWindowFullscreen(window, fullscreen);
+}
 
-// text input
-SDL_WRAPPER(SDL_StartTextInput, bool, (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_StopTextInput, bool, (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_TextInputActive, bool, (SDL_Window* window), (window))
-SDL_WRAPPER(SDL_SetTextInputArea, bool,
-    (SDL_Window* window, const SDL_Rect* rect, int cursor),
-    (window, rect, cursor))
+extern "C" bool SDLCALL SDL_ShowWindow(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_ShowWindow(window);
+}
 
-// gamepad
-SDL_WRAPPER(SDL_OpenGamepad, SDL_Gamepad*,
-    (SDL_JoystickID instance_id), (instance_id))
-SDL_WRAPPER_VOID(SDL_CloseGamepad, (SDL_Gamepad* gamepad), (gamepad))
-SDL_WRAPPER(SDL_GetGamepads, SDL_JoystickID*, (int* count), (count));
-SDL_WRAPPER(SDL_GetGamepadAxis, Sint16,
-    (SDL_Gamepad* gamepad, SDL_GamepadAxis axis), (gamepad, axis))
-SDL_WRAPPER(SDL_GetGamepadButton, bool,
-    (SDL_Gamepad* gamepad, SDL_GamepadButton button), (gamepad, button))
+extern "C" bool SDLCALL SDL_RaiseWindow(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_RaiseWindow(window);
+}
 
-// utility
-SDL_WRAPPER_VOID(SDL_free, (void* mem), (mem))
-SDL_WRAPPER(SDL_OpenURL, bool, (const char* url), (url))
-SDL_WRAPPER(SDL_GetCurrentVideoDriver, const char*, (), ())
-SDL_WRAPPER(SDL_GetPointerProperty, void*,
-    (SDL_PropertiesID props, const char* name, void* defaultVal),
-    (props, name, defaultVal))
+extern "C" bool SDLCALL SDL_SetWindowParent(SDL_Window* window, SDL_Window* parent)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetWindowParent(window, parent);
+}
 
-#undef SDL_WRAPPER
-#undef SDL_WRAPPER_VOID
+extern "C" SDL_WindowFlags SDLCALL SDL_GetWindowFlags(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowFlags(window);
+}
+
+extern "C" float SDLCALL SDL_GetWindowDisplayScale(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowDisplayScale(window);
+}
+
+extern "C" bool SDLCALL SDL_GetWindowRelativeMouseMode(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowRelativeMouseMode(window);
+}
+
+extern "C" SDL_Window* SDLCALL SDL_GetWindowFromID(SDL_WindowID id)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowFromID(id);
+}
+
+extern "C" SDL_PropertiesID SDLCALL SDL_GetWindowProperties(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetWindowProperties(window);
+}
+
+extern "C" SDL_DisplayID* SDLCALL SDL_GetDisplays(int* count)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetDisplays(count);
+}
+
+extern "C" SDL_DisplayID SDLCALL SDL_GetPrimaryDisplay()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetPrimaryDisplay();
+}
+
+extern "C" SDL_DisplayMode** SDLCALL SDL_GetFullscreenDisplayModes(SDL_DisplayID displayID, int* count)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetFullscreenDisplayModes(displayID, count);
+}
+
+extern "C" bool SDLCALL SDL_GetDisplayBounds(SDL_DisplayID displayID, SDL_Rect* rect)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetDisplayBounds(displayID, rect);
+}
+
+extern "C" bool SDLCALL SDL_GetDisplayUsableBounds(SDL_DisplayID displayID, SDL_Rect* rect)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetDisplayUsableBounds(displayID, rect);
+}
+
+extern "C" float SDLCALL SDL_GetDisplayContentScale(SDL_DisplayID displayID)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetDisplayContentScale(displayID);
+}
+
+extern "C" void SDLCALL SDL_WarpMouseInWindow(SDL_Window* window, float x, float y)
+{
+    ::hg::sdl::sdlFuncs.SDL_WarpMouseInWindow(window, x, y);
+}
+
+extern "C" bool SDLCALL SDL_WarpMouseGlobal(float x, float y)
+{
+    return ::hg::sdl::sdlFuncs.SDL_WarpMouseGlobal(x, y);
+}
+
+extern "C" SDL_MouseButtonFlags SDLCALL SDL_GetGlobalMouseState(float* x, float* y)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetGlobalMouseState(x, y);
+}
+
+extern "C" SDL_Window* SDLCALL SDL_GetMouseFocus()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetMouseFocus();
+}
+
+extern "C" SDL_Window* SDLCALL SDL_GetKeyboardFocus()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetKeyboardFocus();
+}
+
+extern "C" bool SDLCALL SDL_CaptureMouse(bool capture)
+{
+    return ::hg::sdl::sdlFuncs.SDL_CaptureMouse(capture);
+}
+
+extern "C" const char* SDLCALL SDL_GetKeyName(SDL_Keycode key)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetKeyName(key);
+}
+
+extern "C" const char* SDLCALL SDL_GetScancodeName(SDL_Scancode scancode)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetScancodeName(scancode);
+}
+
+extern "C" bool SDLCALL SDL_HasClipboardText()
+{
+    return ::hg::sdl::sdlFuncs.SDL_HasClipboardText();
+}
+
+extern "C" char* SDLCALL SDL_GetClipboardText()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetClipboardText();
+}
+
+extern "C" bool SDLCALL SDL_SetClipboardText(const char* text)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetClipboardText(text);
+}
+
+extern "C" SDL_Cursor* SDLCALL SDL_CreateSystemCursor(SDL_SystemCursor id)
+{
+    return ::hg::sdl::sdlFuncs.SDL_CreateSystemCursor(id);
+}
+
+extern "C" void SDLCALL SDL_DestroyCursor(SDL_Cursor* cursor)
+{
+    ::hg::sdl::sdlFuncs.SDL_DestroyCursor(cursor);
+}
+
+extern "C" bool SDLCALL SDL_SetCursor(SDL_Cursor* cursor)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetCursor(cursor);
+}
+
+extern "C" bool SDLCALL SDL_ShowCursor()
+{
+    return ::hg::sdl::sdlFuncs.SDL_ShowCursor();
+}
+
+extern "C" bool SDLCALL SDL_HideCursor()
+{
+    return ::hg::sdl::sdlFuncs.SDL_HideCursor();
+}
+
+extern "C" bool SDLCALL SDL_SetHint(const char* name, const char* value)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetHint(name, value);
+}
+
+extern "C" bool SDLCALL SDL_PollEvent(SDL_Event* event)
+{
+    return ::hg::sdl::sdlFuncs.SDL_PollEvent(event);
+}
+
+extern "C" Uint64 SDLCALL SDL_GetTicksNS()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetTicksNS();
+}
+
+extern "C" Uint64 SDLCALL SDL_GetPerformanceCounter()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetPerformanceCounter();
+}
+
+extern "C" Uint64 SDLCALL SDL_GetPerformanceFrequency()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetPerformanceFrequency();
+}
+
+extern "C" int SDLCALL SDL_GetVersion()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetVersion();
+}
+
+extern "C" SDL_GLContext SDLCALL SDL_GL_CreateContext(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GL_CreateContext(window);
+}
+
+extern "C" bool SDLCALL SDL_GL_DestroyContext(SDL_GLContext context)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GL_DestroyContext(context);
+}
+
+extern "C" SDL_GLContext SDLCALL SDL_GL_GetCurrentContext()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GL_GetCurrentContext();
+}
+
+extern "C" bool SDLCALL SDL_GL_MakeCurrent(SDL_Window* window, SDL_GLContext context)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GL_MakeCurrent(window, context);
+}
+
+extern "C" bool SDLCALL SDL_GL_SetAttribute(SDL_GLAttr attr, int value)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GL_SetAttribute(attr, value);
+}
+
+extern "C" bool SDLCALL SDL_GL_SetSwapInterval(int interval)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GL_SetSwapInterval(interval);
+}
+
+extern "C" bool SDLCALL SDL_GL_SwapWindow(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GL_SwapWindow(window);
+}
+
+extern "C" bool SDLCALL SDL_Vulkan_CreateSurface(SDL_Window* window, VkInstance instance,
+    const VkAllocationCallbacks* allocator, VkSurfaceKHR* surface)
+{
+    return ::hg::sdl::sdlFuncs.SDL_Vulkan_CreateSurface(window, instance, allocator, surface);
+}
+
+extern "C" const char* const* SDLCALL SDL_Vulkan_GetInstanceExtensions(Uint32* count)
+{
+    return ::hg::sdl::sdlFuncs.SDL_Vulkan_GetInstanceExtensions(count);
+}
+
+extern "C" SDL_AudioDeviceID SDLCALL SDL_OpenAudioDevice(SDL_AudioDeviceID devid, const SDL_AudioSpec* spec)
+{
+    return ::hg::sdl::sdlFuncs.SDL_OpenAudioDevice(devid, spec);
+}
+
+extern "C" void SDLCALL SDL_CloseAudioDevice(SDL_AudioDeviceID devid)
+{
+    ::hg::sdl::sdlFuncs.SDL_CloseAudioDevice(devid);
+}
+
+extern "C" SDL_AudioStream* SDLCALL SDL_CreateAudioStream(const SDL_AudioSpec* src_spec,
+    const SDL_AudioSpec* dst_spec)
+{
+    return ::hg::sdl::sdlFuncs.SDL_CreateAudioStream(src_spec, dst_spec);
+}
+
+extern "C" void SDLCALL SDL_DestroyAudioStream(SDL_AudioStream* stream)
+{
+    ::hg::sdl::sdlFuncs.SDL_DestroyAudioStream(stream);
+}
+
+extern "C" bool SDLCALL SDL_BindAudioStream(SDL_AudioDeviceID devid, SDL_AudioStream* stream)
+{
+    return ::hg::sdl::sdlFuncs.SDL_BindAudioStream(devid, stream);
+}
+
+extern "C" bool SDLCALL SDL_SetAudioStreamGetCallback(SDL_AudioStream* stream, SDL_AudioStreamCallback callback, void *userdata)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetAudioStreamGetCallback(stream, callback, userdata);
+}
+
+extern "C" bool SDLCALL SDL_SetAudioStreamFormat(SDL_AudioStream* stream, const SDL_AudioSpec* src_spec,
+    const SDL_AudioSpec* dst_spec)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetAudioStreamFormat(stream, src_spec, dst_spec);
+}
+
+extern "C" bool SDLCALL SDL_PutAudioStreamData(SDL_AudioStream* stream, const void* data, int len)
+{
+    return ::hg::sdl::sdlFuncs.SDL_PutAudioStreamData(stream, data, len);
+}
+
+extern "C" int SDLCALL SDL_GetAudioStreamQueued(SDL_AudioStream* stream)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetAudioStreamQueued(stream);
+}
+
+extern "C" bool SDLCALL SDL_SetAudioStreamGain(SDL_AudioStream* stream, float gain)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetAudioStreamGain(stream, gain);
+}
+
+extern "C" bool SDLCALL SDL_StartTextInput(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_StartTextInput(window);
+}
+
+extern "C" bool SDLCALL SDL_StopTextInput(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_StopTextInput(window);
+}
+
+extern "C" bool SDLCALL SDL_TextInputActive(SDL_Window* window)
+{
+    return ::hg::sdl::sdlFuncs.SDL_TextInputActive(window);
+}
+
+extern "C" bool SDLCALL SDL_SetTextInputArea(SDL_Window* window, const SDL_Rect* rect, int cursor)
+{
+    return ::hg::sdl::sdlFuncs.SDL_SetTextInputArea(window, rect, cursor);
+}
+
+extern "C" SDL_Gamepad* SDLCALL SDL_OpenGamepad(SDL_JoystickID instance_id)
+{
+    return ::hg::sdl::sdlFuncs.SDL_OpenGamepad(instance_id);
+}
+
+extern "C" void SDLCALL SDL_CloseGamepad(SDL_Gamepad* gamepad)
+{
+    ::hg::sdl::sdlFuncs.SDL_CloseGamepad(gamepad);
+}
+
+extern "C" SDL_JoystickID* SDLCALL SDL_GetGamepads(int* count)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetGamepads(count);
+}
+
+extern "C" Sint16 SDLCALL SDL_GetGamepadAxis(SDL_Gamepad* gamepad, SDL_GamepadAxis axis)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetGamepadAxis(gamepad, axis);
+}
+
+extern "C" bool SDLCALL SDL_GetGamepadButton(SDL_Gamepad* gamepad, SDL_GamepadButton button)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetGamepadButton(gamepad, button);
+}
+
+extern "C" void SDLCALL SDL_free(void* mem)
+{
+    ::hg::sdl::sdlFuncs.SDL_free(mem);
+}
+
+extern "C" bool SDLCALL SDL_OpenURL(const char* url)
+{
+    return ::hg::sdl::sdlFuncs.SDL_OpenURL(url);
+}
+
+extern "C" const char* SDLCALL SDL_GetCurrentVideoDriver()
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetCurrentVideoDriver();
+}
+
+extern "C" void* SDLCALL SDL_GetPointerProperty(SDL_PropertiesID props, const char* name, void* defaultVal)
+{
+    return ::hg::sdl::sdlFuncs.SDL_GetPointerProperty(props, name, defaultVal);
+}

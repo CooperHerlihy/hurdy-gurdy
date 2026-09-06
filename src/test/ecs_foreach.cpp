@@ -60,11 +60,11 @@ TEST(testForEachParSingleEntityAndRef)
     ecs.add<u32>(e1) = 10;
     ecs.add<u32>(e2) = 20;
 
-    hg::SpinLock lk;
+    SpinLock lk;
     u64 sum = 0;
     ecs.forEachPar<u32>([&](Entity e, u32& v)
     {
-        hg::SpinLockScope scope{&lk};
+        SpinLockScope scope{lk};
         sum += v;
         (void)e;
     });
@@ -79,11 +79,11 @@ TEST(testForEachParSingleEntityOnly)
     ecs.add<u32>(e1) = 10;
     ecs.add<u32>(e2) = 20;
 
-    hg::SpinLock lk;
+    SpinLock lk;
     u64 sum = 0;
     ecs.forEachPar<u32>([&](Entity e)
     {
-        hg::SpinLockScope scope{&lk};
+        SpinLockScope scope{lk};
         sum += ecs.get<u32>(e);
     });
     ASSERT(sum == 30);
@@ -97,11 +97,11 @@ TEST(testForEachParSingleRefOnly)
     ecs.add<u32>(e1) = 10;
     ecs.add<u32>(e2) = 20;
 
-    hg::SpinLock lk;
+    SpinLock lk;
     u64 sum = 0;
     ecs.forEachPar<u32>([&](u32& v)
     {
-        hg::SpinLockScope scope{&lk};
+        SpinLockScope scope{lk};
         sum += v;
     });
     ASSERT(sum == 30);
@@ -174,11 +174,11 @@ TEST(testForEachParMultiEntityAndRef)
     ecs.add<u32>(e2) = 2;
     ecs.add<f32>(e2) = 20.0f;
 
-    hg::SpinLock lk;
+    SpinLock lk;
     u64 sum = 0;
     ecs.forEachPar<u32, f32>([&](Entity e, u32& a, f32& b)
     {
-        hg::SpinLockScope scope{&lk};
+        SpinLockScope scope{lk};
         sum += a + (u64)b;
         (void)e;
     });
@@ -195,11 +195,11 @@ TEST(testForEachParMultiEntityOnly)
     ecs.add<u32>(e2) = 2;
     ecs.add<f32>(e2) = 20.0f;
 
-    hg::SpinLock lk;
+    SpinLock lk;
     u64 sum = 0;
     ecs.forEachPar<u32, f32>([&](Entity e)
     {
-        hg::SpinLockScope scope{&lk};
+        SpinLockScope scope{lk};
         sum += ecs.get<u32>(e);
     });
     ASSERT(sum == 3);
@@ -215,11 +215,11 @@ TEST(testForEachParMultiRefOnly)
     ecs.add<u32>(e2) = 2;
     ecs.add<f32>(e2) = 20.0f;
 
-    hg::SpinLock lk;
+    SpinLock lk;
     u64 sum = 0;
     ecs.forEachPar<u32, f32>([&](u32& a, f32& b)
     {
-        hg::SpinLockScope scope{&lk};
+        SpinLockScope scope{lk};
         sum += a + (u64)b;
     });
     ASSERT(sum == 33);

@@ -3,85 +3,59 @@
 #include "hg/inttypes.hpp"
 #include "hg/array.hpp"
 #include "hg/assets.hpp"
+#include "hg/concurrency.hpp"
 
 namespace hg {
 
 /**
- * AudioStream implementation data
+ * The config for the audio stream
  */
-struct AudioStreamData;
+struct AudioConfig {
+    /**
+     * The number of channels (mono, stereo, etc.)
+     */
+    u32 channels = 1;
+    /**
+     * The samples per second
+     */
+    u32 sampleRate = 48000;
+};
 
 /**
- * An audio stream
+ * The callback used by the audio thread
+ *
+ * Parameters
+ * - userData The custom user data
+ * - audioBuffer The buffer that needs to be filled by the implementation
+ * - config The configuration for the audio stream, should be but may not be the
+ *   same as preferredConfig from setCallback
  */
-struct AudioStream {
+using AudioCallback = void (*)(void* userData, Span<f32> audioBuffer, AudioConfig config);
+
+/**
+ * An audio device
+ */
+struct AudioDevice {
     /**
-     * The implementation data
+     * The audio device identifier
      */
-    AudioStreamData* data = nullptr;
+    u32 id;
 
     /**
-     * Construct empty
+     * Set the current audio callback and start the device
      */
-    AudioStream() noexcept = default;
+    void setCallback(AudioCallback callback, void* userData, const AudioConfig& preferredConfig = {});
 
     /**
-     * Create a new audio stream
-     *
-     * Parameters
-     * - frequency The segments per second to play
-     * - channels The number of channels (mono, stereo, etc.)
+     * Remove the callback and stop the device
      */
-    AudioStream(u32 frequency, u32 channels);
-
-    /**
-     * Destroy the audio stream
-     */
-    ~AudioStream() noexcept;
-
-    /**
-     * Push data to the audio stream
-     */
-    void push(Span<f32> samples);
-
-    /**
-     * Clear data from the audio player
-     */
-    void clear();
-
-    /**
-     * Returns the amount of audio still queued in floats
-     */
-    u32 queuedSize();
-
-    /**
-     * The the gain for the stream
-     */
-    void setGain(f32 gain);
-
-    /**
-     * Move construct
-     */
-    AudioStream(AudioStream&& other) noexcept
-        : data{std::exchange(other.data, nullptr)}
-    {}
-
-    /**
-     * Move assign
-     */
-    AudioStream& operator=(AudioStream&& other) noexcept
-    {
-        if (this != &other)
-        {
-            this->~AudioStream();
-            new (this) AudioStream{std::move(other)};
-        }
-        return *this;
-    }
-
-    AudioStream(const AudioStream&) = delete;
-    AudioStream& operator=(const AudioStream&) = delete;
+    void unsetCallback();
 };
+
+/**
+ * Get the default audio device
+ */
+AudioDevice& defaultAudioDevice();
 
 /**
  * Audio data asset
@@ -110,19 +84,19 @@ void assetLoadImpl(AssetData<Sound>* data);
 /**
  * A music track in the audio player
  */
-struct AudioPlayerMusic {
+struct AudioPlayerSound {
     /**
-     * The music's stream
+     * The sound to play
      */
-    AudioStream stream{};
-    /**
-     * The music sound to play
-     */
-    Asset<Sound> sound{};
+    Asset<Sound> asset{};
     /**
      * The current position in the sound
      */
     u64 pos = 0;
+    /**
+     * The current gain
+     */
+    f32 gain = 0.0f;
     /**
      * Whether the music is currently playing or paused
      */
@@ -134,23 +108,40 @@ struct AudioPlayerMusic {
  */
 struct AudioPlayer {
     /**
-     * The repeating music
+     * The mutex
      */
-    Array<AudioPlayerMusic> music{};
+    SpinLock lock{};
     /**
      * The temporary sounds
      */
-    Array<AudioStream> sounds{};
+    Array<AudioPlayerSound> sounds{};
+    /**
+     * The repeating music
+     */
+    Array<AudioPlayerSound> music{};
 
     /**
      * Update the music and sounds
      */
-    void update();
+    void update(Span<f32> buf, AudioConfig config);
+
+    /**
+     * Update the music and sounds
+     */
+    static void callback(void* player, Span<f32> buf, AudioConfig config)
+    {
+        (*static_cast<AudioPlayer*>(player)).update(buf, config);
+    }
+
+    /**
+     * Play a sound once
+     */
+    void playSound(const Asset<Sound>& sound, f32 gain = 1.0f);
 
     /**
      * Start a new music track, or resume an existing one
      */
-    void playMusic(const Asset<Sound>& music);
+    void playMusic(const Asset<Sound>& music, f32 gain = 1.0f);
 
     /**
      * Remove a music track from the player
@@ -166,11 +157,6 @@ struct AudioPlayer {
      * Set the volume for a music track
      */
     void setMusicGain(const Asset<Sound>& music, f32 gain);
-
-    /**
-     * Play a sound once
-     */
-    void playSound(const Asset<Sound>& sound, f32 gain = 1.0f);
 };
 
 } // namespace hg
