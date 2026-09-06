@@ -5,6 +5,10 @@
 #include <SDL3/SDL_audio.h>
 
 namespace hg {
+
+void windowInit();
+void windowDeinit();
+
 namespace sdl {
 
 bool loadSDL();

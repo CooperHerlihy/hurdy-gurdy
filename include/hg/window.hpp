@@ -4,6 +4,7 @@
 #include "hg/maybe.hpp"
 #include "hg/span.hpp"
 #include "hg/smart_ptr.hpp"
+#include "hg/strings.hpp"
 #include "hg/gpu.hpp"
 
 namespace hg {
@@ -25,6 +26,7 @@ enum WindowEventType : u32 {
     WindowEventType_none = 0,
     WindowEventType_buttonPress,
     WindowEventType_buttonRelease,
+    WindowEventType_textInput,
     WindowEventType_count,
 };
 
@@ -160,10 +162,34 @@ struct WindowEvent {
      */
     WindowEventType type;
     /**
-     * The button that was pressed or released
+     * The button that was pressed or released (buttonPress/buttonRelease)
      */
     Button button;
+    /**
+     * UTF-8 text input (textInput)
+     */
+    char text[32];
 };
+
+/**
+ * Display enumeration info
+ */
+struct DisplayInfo {
+    i32 posX = 0;
+    i32 posY = 0;
+    i32 sizeW = 0;
+    i32 sizeH = 0;
+    i32 workPosX = 0;
+    i32 workPosY = 0;
+    i32 workSizeW = 0;
+    i32 workSizeH = 0;
+    f32 dpiScale = 1.0f;
+};
+
+/**
+ * Returns the display info
+ */
+Span<DisplayInfo> displayInfo();
 
 /**
  * The present mode for the swapchain
@@ -189,6 +215,10 @@ struct WindowConfig {
      * How the swapchain images will be used
      */
     GpuImageUsageFlags imageUsage = GpuImageUsage_colorAttachment;
+    /**
+     * Whether the window starts hidden
+     */
+    bool hidden = false;
 };
 
 /**
@@ -221,9 +251,39 @@ struct Window {
     ~Window() noexcept;
 
     /**
+     * Returns the window's pixel format
+     */
+    Format imageFormat() const;
+
+    /**
+     * Returns the window's current image, or nullptr if unavailable this frame
+     */
+    GpuView* imageView() const;
+
+    /**
      * Set the window title
      */
     void setTitle(StringView title);
+
+    /**
+     * Returns whether the window was closed
+     */
+    bool wasClosed() const;
+
+    /**
+     * Set the focus to this window
+     */
+    void setFocus();
+
+    /**
+     * Returns whether the mouse is focused on the window
+     */
+    bool isFocused() const;
+
+    /**
+     * Returns whether this window is minimized
+     */
+    bool isMinimized() const;
 
     /**
      * Set the width and height
@@ -236,26 +296,6 @@ struct Window {
     void setFullscreen(bool set = true);
 
     /**
-     * Returns the window's pixel format
-     */
-    Format imageFormat() const;
-
-    /**
-     * Returns the window's current image, or nullptr if unavailable this frame
-     */
-    GpuView* imageView() const;
-
-    /**
-     * Returns whether the window was closed
-     */
-    bool wasClosed() const;
-
-    /**
-     * Returns whether the mouse is focused on the window
-     */
-    bool isFocused() const;
-
-    /**
      * Get the window's width in pixels
      */
     u32 width() const;
@@ -266,27 +306,82 @@ struct Window {
     u32 height() const;
 
     /**
-     * Returns the current mouse x position relative to the window height
+     * Get the framebuffer scale in the x direction
+     */
+    f32 scaleX() const;
+
+    /**
+     * Get the framebuffer scale in the y direction
+     */
+    f32 scaleY() const;
+
+    /**
+     * Set the position
+     */
+    void setPosition(i32 x, i32 y);
+
+    /**
+     * Get the window's x position
+     */
+    u32 posX() const;
+
+    /**
+     * Get the window's y position
+     */
+    u32 posY() const;
+
+    /**
+     * Set the window's opacity
+     */
+    void setOpacity(f32 alpha);
+
+    /**
+     * Show the window
+     */
+    void show();
+
+    /**
+     * Get the current mouse x position in screen coordinates
+     */
+    f32 globalMouseX() const;
+
+    /**
+     * Get the current mouse y position in screen coordinates
+     */
+    f32 globalMouseY() const;
+
+    /**
+     * Get the current mouse x position relative to the window height
      */
     f32 mouseX() const;
 
     /**
-     * Returns the current mouse y position relative to the window height
+     * Get the current mouse y position relative to the window height
      */
     f32 mouseY() const;
 
     /**
-     * Returns the change in mouse x position relative to the window height
+     * Get the change in mouse x position relative to the window height
      */
     f32 mouseDX() const;
 
     /**
-     * Returns the change in mouse y position relative to the window height
+     * Get the change in mouse y position relative to the window height
      */
     f32 mouseDY() const;
 
     /**
-     * Returns whether the key is currently down
+     * Get the horizontal mouse wheel movement
+     */
+    f32 wheelDX() const;
+
+    /**
+     * Get the vertical mouse wheel movement
+     */
+    f32 wheelDY() const;
+
+    /**
+     * Get whether the key is currently down
      */
     bool isButtonDown(Button key) const;
 
@@ -308,6 +403,59 @@ struct Window {
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 };
+
+/**
+ * The types of cursors
+ */
+enum CursorType : u32 {
+    CursorType_arrow,
+    CursorType_textInput,
+    CursorType_resizeAll,
+    CursorType_resizeNS,
+    CursorType_resizeEW,
+    CursorType_resizeNESW,
+    CursorType_resizeNWSE,
+    CursorType_hand,
+    CursorType_wait,
+    CursorType_progress,
+    CursorType_notAllowed,
+    CursorType_count,
+};
+
+/**
+ * Sets the current cursor
+ */
+void setCursor(CursorType type);
+
+/**
+ * Shows the cursor
+ */
+void showCursor();
+
+/**
+ * Hides the cursor
+ */
+void hideCursor();
+
+/**
+ * Returns whether the platform has clipboard text
+ */
+bool hasClipboardText();
+
+/**
+ * Returns the platform clipboard text
+ */
+String getClipboardText();
+
+/**
+ * Sets the platform clipboard text
+ */
+void setClipboardText(const char* text);
+
+/**
+ * Opens a URL in the platform's default handler
+ */
+void openURL(const char* url);
 
 /**
  * Acquire an image from each swapchain and begin a command buffer

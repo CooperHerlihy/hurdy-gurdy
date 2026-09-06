@@ -1,16 +1,13 @@
-#include "hg/window.hpp"
+#include "sdl_internal.hpp"
 
 #include "internal.hpp"
+
+#include "hg/window.hpp"
 #include "hg/error.hpp"
 #include "hg/array.hpp"
 #include "hg/map.hpp"
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_vulkan.h>
 #include "vulkan/vulkan.h"
-
-#include <imgui.h>
-#include <backends/imgui_impl_sdl3.h>
 
 namespace hg {
 
@@ -36,13 +33,75 @@ struct WindowData {
 
 struct WindowState {
     Map<SDL_WindowID, WindowData*> ids{};
+
     f32 mouseDX = 0.0f;
     f32 mouseDY = 0.0f;
+    f32 wheelDX = 0.0f;
+    f32 wheelDY = 0.0f;
     bool wasQuit = false;
-    bool imguiInitialized = false;
+
+    SDL_Cursor* cursors[CursorType_count]{};
+    SDL_Cursor* currentCursor = nullptr;
+
+    DisplayInfo* displays = nullptr;
+    u32 displayCount = 0;
 };
 
-WindowState windowState{};
+static WindowState windowState{};
+
+void windowInit()
+{
+    windowState = WindowState{};
+
+    int count = 0;
+    SDL_DisplayID* ids = SDL_GetDisplays(&count);
+    windowState.displayCount = static_cast<u32>(count);
+    windowState.displays = new DisplayInfo[static_cast<u32>(count)];
+
+    for (u32 n = 0; n < windowState.displayCount; n++)
+    {
+        DisplayInfo& info = windowState.displays[n];
+        SDL_DisplayID displayId = ids[n];
+        SDL_Rect r;
+        SDL_GetDisplayBounds(displayId, &r);
+        info.posX = r.x;
+        info.posY = r.y;
+        info.sizeW = r.w;
+        info.sizeH = r.h;
+
+        if (SDL_GetDisplayUsableBounds(displayId, &r) && r.w > 0 && r.h > 0)
+        {
+            info.workPosX = r.x;
+            info.workPosY = r.y;
+            info.workSizeW = r.w;
+            info.workSizeH = r.h;
+        }
+        else
+        {
+            info.workPosX = info.posX;
+            info.workPosY = info.posY;
+            info.workSizeW = info.sizeW;
+            info.workSizeH = info.sizeH;
+        }
+
+        info.dpiScale = SDL_GetDisplayContentScale(displayId);
+    }
+    SDL_free(ids);
+}
+
+void windowDeinit()
+{
+    for (u32 n = 0; n < CursorType_count; n++)
+    {
+        if (windowState.cursors[n] != nullptr)
+            SDL_DestroyCursor(windowState.cursors[n]);
+    }
+    windowState.currentCursor = nullptr;
+
+    delete[] windowState.displays;
+    windowState.displays = nullptr;
+    windowState.displayCount = 0;
+}
 
 WindowData::~WindowData() noexcept
 {
@@ -83,27 +142,63 @@ Window::~Window() noexcept = default;
 Window::Window(Window&& other) noexcept = default;
 Window& Window::operator=(Window&& other) noexcept = default;
 
-void Window::setTitle(StringView title)
+Maybe<Window> Window::create(const WindowConfig& config)
 {
+    Maybe<Window> window = some<Window>();
+    window->data = makeUnique<WindowData>();
+
     ArenaScope scratch = getScratch();
-    SDL_SetWindowTitle(data->sdlWindow, cString(scratch, title));
-}
 
-void Window::setSize(u32 width, u32 height, bool resizeable)
-{
-    SDL_SetWindowSize(data->sdlWindow, static_cast<int>(width), static_cast<int>(height));
-    data->swap.resize(width, height);
+    u32 flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE;
+    if (config.hidden)
+        flags |= SDL_WINDOW_HIDDEN;
 
-    SDL_SetWindowResizable(data->sdlWindow, resizeable);
-}
+    window->data->sdlWindow = SDL_CreateWindow(
+        "Hurdy Gurdy",
+        800, 600,
+        flags);
+    if (window->data->sdlWindow == nullptr)
+    {
+        setError(SDL_GetError());
+        window->data = {};
+        return {};
+    }
 
-void Window::setFullscreen(bool set)
-{
-    SDL_SetWindowFullscreen(data->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
+    windowState.ids.add(SDL_GetWindowID(window->data->sdlWindow), window->data);
 
     u32 w, h;
-    SDL_GetWindowSize(data->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
-    data->swap.resize(w, h);
+    SDL_GetWindowSize(window->data->sdlWindow,
+        reinterpret_cast<int*>(&w),
+        reinterpret_cast<int*>(&h));
+
+    VkSurfaceKHR surface;
+    if (!SDL_Vulkan_CreateSurface(
+        window->data->sdlWindow,
+        static_cast<VkInstance>(internal::getVulkanInstance()),
+        nullptr,
+        &surface))
+    {
+        setError(SDL_GetError());
+        goto surfaceFailed;
+    }
+
+    window->data->swap = internal::Swapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
+    if (window->data->swap.data == nullptr)
+    {
+        windowState.ids.remove(SDL_GetWindowID(window->data->sdlWindow));
+        goto windowFailed;
+    }
+
+    window->data->events = Array<WindowEvent>(0, 1024);
+
+    return window;
+
+windowFailed:
+    vkDestroySurfaceKHR(static_cast<VkInstance>(internal::getVulkanInstance()), surface, nullptr);
+surfaceFailed:
+    SDL_DestroyWindow(window->data->sdlWindow);
+    window->data = {};
+    return {};
 }
 
 Format Window::imageFormat() const
@@ -116,14 +211,46 @@ GpuView* Window::imageView() const
     return data->swap.currentView();
 }
 
+void Window::setTitle(StringView title)
+{
+    ArenaScope scratch = getScratch();
+    SDL_SetWindowTitle(data->sdlWindow, cString(scratch, title));
+}
+
 bool Window::wasClosed() const
 {
     return data->wasClosed;
 }
 
+void Window::setFocus()
+{
+    SDL_RaiseWindow(data->sdlWindow);
+}
+
 bool Window::isFocused() const
 {
     return SDL_GetMouseFocus() == data->sdlWindow;
+}
+
+bool Window::isMinimized() const
+{
+    return (SDL_GetWindowFlags(data->sdlWindow) & SDL_WINDOW_MINIMIZED) != 0;
+}
+
+void Window::setSize(u32 width, u32 height, bool resizeable)
+{
+    SDL_SetWindowSize(data->sdlWindow, static_cast<int>(width), static_cast<int>(height));
+    data->swap.resize(width, height);
+    SDL_SetWindowResizable(data->sdlWindow, resizeable);
+}
+
+void Window::setFullscreen(bool set)
+{
+    SDL_SetWindowFullscreen(data->sdlWindow, set ? SDL_WINDOW_FULLSCREEN : 0);
+
+    u32 w, h;
+    SDL_GetWindowSize(data->sdlWindow, reinterpret_cast<int*>(&w), reinterpret_cast<int*>(&h));
+    data->swap.resize(w, h);
 }
 
 u32 Window::width() const
@@ -134,6 +261,65 @@ u32 Window::width() const
 u32 Window::height() const
 {
     return data->swap.height();
+}
+
+f32 Window::scaleX() const
+{
+    int w, dw;
+    SDL_GetWindowSize(data->sdlWindow, &w, nullptr);
+    SDL_GetWindowSizeInPixels(data->sdlWindow, &dw, nullptr);
+    return (w > 0) ? static_cast<f32>(dw) / static_cast<f32>(w) : 1.0f;
+}
+
+f32 Window::scaleY() const
+{
+    int h, dh;
+    SDL_GetWindowSize(data->sdlWindow, nullptr, &h);
+    SDL_GetWindowSizeInPixels(data->sdlWindow, nullptr, &dh);
+    return (h > 0) ? static_cast<f32>(dh) / static_cast<f32>(h) : 1.0f;
+}
+
+void Window::setPosition(i32 x, i32 y)
+{
+    SDL_SetWindowPosition(data->sdlWindow, x, y);
+}
+
+u32 Window::posX() const
+{
+    i32 x;
+    SDL_GetWindowPosition(data->sdlWindow, &x, nullptr);
+    return static_cast<u32>(x);
+}
+
+u32 Window::posY() const
+{
+    i32 y;
+    SDL_GetWindowPosition(data->sdlWindow, nullptr, &y);
+    return static_cast<u32>(y);
+}
+
+void Window::setOpacity(f32 alpha)
+{
+    SDL_SetWindowOpacity(data->sdlWindow, alpha);
+}
+
+void Window::show()
+{
+    SDL_ShowWindow(data->sdlWindow);
+}
+
+f32 Window::globalMouseX() const
+{
+    f32 x;
+    SDL_GetGlobalMouseState(&x, nullptr);
+    return x;
+}
+
+f32 Window::globalMouseY() const
+{
+    f32 y;
+    SDL_GetGlobalMouseState(nullptr, &y);
+    return y;
 }
 
 f32 Window::mouseX() const
@@ -154,6 +340,16 @@ f32 Window::mouseDX() const
 f32 Window::mouseDY() const
 {
     return windowState.mouseDY / static_cast<f32>(data->swap.height());
+}
+
+f32 Window::wheelDX() const
+{
+    return windowState.wheelDX;
+}
+
+f32 Window::wheelDY() const
+{
+    return windowState.wheelDY;
 }
 
 bool Window::isButtonDown(Button key) const
@@ -298,6 +494,8 @@ void processEvents()
 {
     windowState.mouseDX = 0;
     windowState.mouseDY = 0;
+    windowState.wheelDX = 0;
+    windowState.wheelDY = 0;
 
     windowState.ids.forEach([&](const SDL_WindowID&, WindowData*& window)
     {
@@ -307,9 +505,6 @@ void processEvents()
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
-        if (windowState.imguiInitialized)
-            ImGui_ImplSDL3_ProcessEvent(&event);
-
         switch (event.type)
         {
             case SDL_EVENT_QUIT:
@@ -346,6 +541,11 @@ void processEvents()
                 windowState.mouseDX += event.motion.xrel;
                 windowState.mouseDY += event.motion.yrel;
             } break;
+            case SDL_EVENT_MOUSE_WHEEL:
+            {
+                windowState.wheelDX += event.wheel.x;
+                windowState.wheelDY += event.wheel.y;
+            } break;
             case SDL_EVENT_KEY_DOWN:
             {
                 Button key = sdlKeycodeToHgButton(event.key.key);
@@ -372,6 +572,19 @@ void processEvents()
 
                     (*w)->events.push(windowEvent);
                     (*w)->isKeyDown[key] = false;
+                }
+            } break;
+            case SDL_EVENT_TEXT_INPUT:
+            {
+                WindowData** w = windowState.ids.get(event.text.windowID);
+                if (w != nullptr)
+                {
+                    WindowEvent windowEvent{};
+                    windowEvent.type = WindowEventType_textInput;
+                    memset(windowEvent.text, 0, sizeof(windowEvent.text));
+                    strncpy(windowEvent.text, event.text.text, sizeof(windowEvent.text) - 1);
+
+                    (*w)->events.push(windowEvent);
                 }
             } break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -411,80 +624,97 @@ bool wasQuit()
     return windowState.wasQuit;
 }
 
-Maybe<Window> Window::create(const WindowConfig& config)
+Span<DisplayInfo> displayInfo()
 {
-    Maybe<Window> window = some<Window>();
-    window->data = makeUnique<WindowData>();
+    return Span<DisplayInfo>{windowState.displays, windowState.displayCount};
+}
 
-    ArenaScope scratch = getScratch();
-
-    window->data->sdlWindow = SDL_CreateWindow(
-        "Hurdy Gurdy",
-        800, 600,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    if (window->data->sdlWindow == nullptr)
+void setCursor(CursorType type)
+{
+    SDL_Cursor*& cursor = windowState.cursors[static_cast<u32>(type)];
+    if (cursor == nullptr)
     {
-        setError(SDL_GetError());
-        window->data = {};
-        return {};
+        SDL_SystemCursor id;
+        switch (type)
+        {
+            case CursorType_arrow:
+                id = SDL_SYSTEM_CURSOR_DEFAULT;
+                break;
+            case CursorType_textInput:
+                id = SDL_SYSTEM_CURSOR_TEXT;
+                break;
+            case CursorType_resizeAll:
+                id = SDL_SYSTEM_CURSOR_MOVE;
+                break;
+            case CursorType_resizeNS:
+                id = SDL_SYSTEM_CURSOR_NS_RESIZE;
+                break;
+            case CursorType_resizeEW:
+                id = SDL_SYSTEM_CURSOR_EW_RESIZE;
+                break;
+            case CursorType_resizeNESW:
+                id = SDL_SYSTEM_CURSOR_NESW_RESIZE;
+                break;
+            case CursorType_resizeNWSE:
+                id = SDL_SYSTEM_CURSOR_NWSE_RESIZE;
+                break;
+            case CursorType_hand:
+                id = SDL_SYSTEM_CURSOR_POINTER;
+                break;
+            case CursorType_wait:
+                id = SDL_SYSTEM_CURSOR_WAIT;
+                break;
+            case CursorType_progress:
+                id = SDL_SYSTEM_CURSOR_PROGRESS;
+                break;
+            case CursorType_notAllowed:
+                id = SDL_SYSTEM_CURSOR_NOT_ALLOWED;
+                break;
+            default:
+                id = SDL_SYSTEM_CURSOR_DEFAULT;
+                break;
+        }
+        cursor = SDL_CreateSystemCursor(id);
     }
 
-    windowState.ids.add(SDL_GetWindowID(window->data->sdlWindow), window->data);
-
-    u32 w, h;
-    SDL_GetWindowSize(window->data->sdlWindow,
-        reinterpret_cast<int*>(&w),
-        reinterpret_cast<int*>(&h));
-
-    VkSurfaceKHR surface;
-    if (!SDL_Vulkan_CreateSurface(
-        window->data->sdlWindow,
-        static_cast<VkInstance>(internal::getVulkanInstance()),
-        nullptr,
-        &surface))
+    if (windowState.currentCursor != cursor)
     {
-        setError(SDL_GetError());
-        goto surfaceFailed;
+        SDL_SetCursor(cursor);
+        windowState.currentCursor = cursor;
     }
-
-    window->data->swap = internal::Swapchain::create(surface, w, h, config.preferredPresentMode, config.imageUsage);
-    if (window->data->swap.data == nullptr)
-    {
-        windowState.ids.remove(SDL_GetWindowID(window->data->sdlWindow));
-        goto windowFailed;
-    }
-
-    window->data->events = Array<WindowEvent>(0, 1024);
-
-    return window;
-
-windowFailed:
-    vkDestroySurfaceKHR(static_cast<VkInstance>(internal::getVulkanInstance()), surface, nullptr);
-surfaceFailed:
-    SDL_DestroyWindow(window->data->sdlWindow);
-    window->data = {};
-    return {};
 }
 
-namespace internal {
-
-void initImGuiWindow(const Window& window)
+void showCursor()
 {
-    ImGui_ImplSDL3_InitForVulkan(window.data->sdlWindow);
-    windowState.imguiInitialized = true;
+    SDL_ShowCursor();
 }
 
-void deinitImGuiWindow()
+void hideCursor()
 {
-    windowState.imguiInitialized = false;
-    ImGui_ImplSDL3_Shutdown();
+    SDL_HideCursor();
 }
 
-void beginImGuiFrameWindow()
+bool hasClipboardText()
 {
-    ImGui_ImplSDL3_NewFrame();
+    return SDL_HasClipboardText();
 }
 
-} // namespace internal
+String getClipboardText()
+{
+    char* sdlText = SDL_GetClipboardText();
+    String result = String::create(StringView{sdlText});
+    SDL_free(sdlText);
+    return result;
+}
+
+void setClipboardText(const char* text)
+{
+    SDL_SetClipboardText(text);
+}
+
+void openURL(const char* url)
+{
+    SDL_OpenURL(url);
+}
 
 } // namespace hg

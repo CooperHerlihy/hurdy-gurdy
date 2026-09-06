@@ -1,9 +1,10 @@
 #include "internal.hpp"
 
-#include "sdl/sdl_internal.hpp"
+#include "sdl_internal.hpp"
 #include "hg/error.hpp"
 
 namespace hg {
+
 namespace internal {
 
 bool initPlatform()
@@ -22,11 +23,14 @@ bool initPlatform()
         sdl::unloadSDL();
         return false;
     }
+
+    hg::windowInit();
     return true;
 }
 
 void deinitPlatform()
 {
+    hg::windowDeinit();
     SDL_Quit();
     sdl::unloadSDL();
 }
@@ -46,4 +50,5 @@ Span<StringView> getPlatformVulkanExtensions(Arena* arena)
 }
 
 } // namespace internal
+
 } // namespace hg

@@ -106,7 +106,6 @@ add_custom_target(shaders DEPENDS ${SHADER_HEADERS})
 
 file(GLOB IMGUI_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/*.cpp)
 set(IMGUI_BACKEND_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_sdl3.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_vulkan.cpp
 )
 

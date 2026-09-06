@@ -57,17 +57,14 @@ struct Swapchain {
     Swapchain& operator=(const Swapchain&) = delete;
 };
 
-void initImGuiWindow(const Window& window);
 void initImGuiGpu(
     const Swapchain& swap,
     Format colorFormat,
     Format depthFormat = Format_undefined,
     Format stencilFormat = Format_undefined);
 
-void deinitImGuiWindow();
 void deinitImGuiGpu();
 
-void beginImGuiFrameWindow();
 void beginImGuiFrameGpu();
 
 } // namespace internal
